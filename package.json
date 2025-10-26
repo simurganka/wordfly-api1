@@ -1,0 +1,21 @@
+{
+    "name": "wordify-polly-api",
+    "version": "1.0.0",
+    "description": "Amazon Polly API for Wordify",
+    "main": "api/polly.ts",
+    "scripts": {
+        "build": "echo 'No build step needed for Vercel'",
+        "dev": "vercel dev"
+    },
+    "dependencies": {
+        "@aws-sdk/client-polly": "^3.645.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0"
+    },
+    "type": "commonjs",
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
