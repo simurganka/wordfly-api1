@@ -41,10 +41,9 @@ export default async function handler(req: any) {
 
         // AWS SDK'yı yükle
         const region = process.env.AWS_REGION || 'eu-central-1';
-        const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-        const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 
-        if (!accessKeyId || !secretAccessKey) {
+        // AWS credentials kontrolü
+        if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
             return {
                 statusCode: 500,
                 headers: corsHeaders,
@@ -55,8 +54,8 @@ export default async function handler(req: any) {
         const polly = new PollyClient({
             region,
             credentials: {
-                accessKeyId,
-                secretAccessKey,
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
             },
         });
 
@@ -70,25 +69,21 @@ export default async function handler(req: any) {
             else if (f === 'pcm') outputFormat = 'pcm';
         }
 
-        const cmdInput: any = {
+        const cmd = new SynthesizeSpeechCommand({
             Text: text,
             VoiceId: selectedVoice as any,
+            LanguageCode: languageCode as any,
             OutputFormat: outputFormat as any,
             Engine: 'standard',
             TextType: (speakingRate || pitch) ? 'ssml' : 'text',
-        };
-
-        if (languageCode) {
-            cmdInput.LanguageCode = languageCode;
-        }
+        });
 
         if (speakingRate || pitch) {
             const rate = typeof speakingRate === 'number' ? `${Math.round(speakingRate * 100)}%` : '100%';
             const p = typeof pitch === 'number' ? `${Math.round(pitch)}%` : '0%';
-            cmdInput.Text = `<speak><prosody rate="${rate}" pitch="${p}">${text}</prosody></speak>`;
+            (cmd.input as any).Text = `<speak><prosody rate="${rate}" pitch="${p}">${text}</prosody></speak>`;
         }
 
-        const cmd = new SynthesizeSpeechCommand(cmdInput);
         const result = await polly.send(cmd);
         const audioStream = result.AudioStream;
         if (!audioStream) {
@@ -99,27 +94,7 @@ export default async function handler(req: any) {
             };
         }
 
-        // Convert streaming blob to buffer
-        const chunks: Uint8Array[] = [];
-        if (audioStream instanceof ReadableStream || 'getReader' in audioStream) {
-            // It's a ReadableStream or has a getReader method
-            const reader = (audioStream as any).getReader();
-            let done = false;
-            while (!done) {
-                const { value, done: streamDone } = await reader.read();
-                done = streamDone;
-                if (value) {
-                    chunks.push(value);
-                }
-            }
-        } else if (audioStream instanceof Uint8Array || audioStream instanceof ArrayBuffer) {
-            // It's already a Uint8Array or ArrayBuffer
-            chunks.push(new Uint8Array(audioStream));
-        } else if (audioStream) {
-            // Fallback: try to convert to Uint8Array
-            chunks.push(new Uint8Array(await (audioStream as any).arrayBuffer()));
-        }
-        const buffer = Buffer.concat(chunks);
+        const buffer = Buffer.from(await audioStream.transformToByteArray());
         const base64 = buffer.toString('base64');
         const contentType =
             outputFormat === 'mp3' ? 'audio/mpeg' :
