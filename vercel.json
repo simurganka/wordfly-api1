@@ -1,9 +1,3 @@
 {
-    "version": 2,
-    "builds": [
-        {
-            "src": "api/polly.ts",
-            "use": "@vercel/node@3.0.0"
-        }
-    ]
+    "version": 2
 }
