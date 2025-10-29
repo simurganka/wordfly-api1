@@ -7,42 +7,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const corsHeaders = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Content-Type': 'application/json'
     };
 
     // OPTIONS preflight
     if (req.method === 'OPTIONS') {
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        return res.status(200).send('');
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: ''
+        };
     }
 
     // POST method kontrolü
     if (req.method !== 'POST') {
-        return res.status(405).setHeader('Content-Type', 'application/json')
-            .setHeader('Access-Control-Allow-Origin', '*')
-            .send(JSON.stringify({ error: 'Use POST' }));
+        return {
+            statusCode: 405,
+            headers: corsHeaders,
+            body: JSON.stringify({ error: 'Use POST' })
+        };
     }
 
     try {
         const { text, languageCode, voiceName, speakingRate, pitch, audioFormat } = req.body;
 
         if (!text || typeof text !== 'string' || text.trim() === '') {
-            return res.status(400).setHeader('Content-Type', 'application/json')
-                .setHeader('Access-Control-Allow-Origin', '*')
-                .send(JSON.stringify({ error: 'text is required' }));
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({ error: 'text is required' })
+            };
         }
 
+        // AWS SDK'yı yükle
         const region = process.env.AWS_REGION || 'eu-central-1';
-
+        
+        // AWS credentials kontrolü
         if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
             return res.status(500).setHeader('Content-Type', 'application/json')
                 .setHeader('Access-Control-Allow-Origin', '*')
                 .send(JSON.stringify({ error: 'AWS credentials not configured' }));
         }
-
+        
         const polly = new PollyClient({
             region,
             credentials: {
@@ -52,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         const defaultVoice = (languageCode || '').startsWith('tr') ? 'Filiz' : 'Joanna';
-        const selectedVoice = voiceName || defaultVoice;
+        const selectedVoice = (voiceName as string) || defaultVoice;
 
         let outputFormat = 'mp3';
         if (audioFormat) {
@@ -76,27 +83,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             (cmd.input as any).Text = `<speak><prosody rate="${rate}" pitch="${p}">${text}</prosody></speak>`;
         }
 
+        console.log('Sending Polly request:', {
+            text: text.substring(0, 50) + '...',
+            voiceId: selectedVoice,
+            languageCode,
+            outputFormat
+        });
+
         const result = await polly.send(cmd);
         const audioStream = result.AudioStream;
+
+        console.log('Polly response:', {
+            hasAudioStream: !!audioStream,
+            audioStreamType: typeof audioStream,
+            audioStreamConstructor: audioStream?.constructor?.name
+        });
+
         if (!audioStream) {
-            return res.status(500).setHeader('Content-Type', 'application/json')
-                .setHeader('Access-Control-Allow-Origin', '*')
-                .send(JSON.stringify({ error: 'No audio stream' }));
+            return {
+                statusCode: 500,
+                headers: corsHeaders,
+                body: JSON.stringify({ error: 'No audio stream' })
+            };
         }
 
         const buffer = Buffer.from(await audioStream.transformToByteArray());
+
+        console.log('Buffer created:', {
+            bufferLength: buffer.length,
+            bufferType: buffer.constructor.name
+        });
+
         const base64 = buffer.toString('base64');
         const contentType =
             outputFormat === 'mp3' ? 'audio/mpeg' :
                 outputFormat === 'ogg_vorbis' ? 'audio/ogg' : 'audio/wav';
 
-        return res.status(200).setHeader('Content-Type', 'application/json')
-            .setHeader('Access-Control-Allow-Origin', '*')
-            .send(JSON.stringify({ base64, contentType }));
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({ base64, contentType })
+        };
     } catch (e: any) {
         console.error('Polly error:', e);
-        return res.status(500).setHeader('Content-Type', 'application/json')
-            .setHeader('Access-Control-Allow-Origin', '*')
-            .send(JSON.stringify({ error: 'Polly failed: ' + e.message }));
+        return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({ error: 'Polly failed: ' + e.message })
+        };
     }
 }
