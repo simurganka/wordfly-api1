@@ -3,7 +3,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // CORS headers helper
     const setCorsHeaders = () => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -44,16 +43,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             },
         });
 
-        const voicesByLanguage: Record<string, string> = {
-            'tr-TR': 'Filiz',
-            'en-US': 'Joanna',
-            'en-GB': 'Amy',
-            'es-ES': 'Lucia',
-            'fr-FR': 'Celine',
-            'de-DE': 'Hans'
+        // Her dil için Polly sesi
+        const getVoiceForLanguage = (lang: string) => {
+            switch (lang) {
+                case 'en': return 'Joanna';
+                case 'fr': return 'Celine';
+                case 'it': return 'Giorgio';
+                case 'es': return 'Enrique';
+                case 'ko': return 'Seoyeon';
+                case 'zh': return 'Zhiyu';
+                case 'ja': return 'Mizuki';
+                case 'de': return 'Vicki';
+                default: return 'Joanna';
+            }
         };
 
-        const selectedVoice = (voiceName as string) || voicesByLanguage[languageCode] || 'Joanna';
+        const selectedVoice = voiceName || getVoiceForLanguage(languageCode);
 
         let outputFormat = 'mp3';
         if (audioFormat) {
