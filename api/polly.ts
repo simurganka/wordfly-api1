@@ -43,23 +43,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             },
         });
 
-        // Her dil için Polly sesi
-        const getVoiceForLanguage = (lang: string) => {
-            switch (lang) {
-                case 'en': return 'Joanna';
-                case 'fr': return 'Celine';
-                case 'it': return 'Giorgio';
-                case 'es': return 'Enrique';
-                case 'ko': return 'Seoyeon';
-                case 'zh': return 'Zhiyu';
-                case 'ja': return 'Mizuki';
-                case 'de': return 'Vicki';
-                default: return 'Joanna';
-            }
+        // Flutter'dan gelen tam languageCode ile Polly uyumlu ses seçimi
+        const voicesByLanguage: { [key: string]: string } = {
+            'en-US': 'Joanna',
+            'en-GB': 'Emma',
+            'fr-FR': 'Celine',
+            'it-IT': 'Giorgio',
+            'es-ES': 'Enrique',
+            'de-DE': 'Vicki',
+            'ko-KR': 'Seoyeon',
+            'ja-JP': 'Mizuki',
+            'zh-CN': 'Zhiyu',
+            'tr-TR': 'Filiz',
+            'pt-BR': 'Camila',
         };
 
-        const selectedVoice = voiceName || getVoiceForLanguage(languageCode);
+        // VoiceName varsa onu kullan, yoksa languageCode ile eşleşeni seç
+        const selectedVoice = voiceName || voicesByLanguage[languageCode] || 'Joanna';
 
+        // Audio format ayarı
         let outputFormat = 'mp3';
         if (audioFormat) {
             const f = audioFormat.toLowerCase();
@@ -67,6 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             else if (f === 'pcm') outputFormat = 'pcm';
         }
 
+        // Polly komutu
         const cmd = new SynthesizeSpeechCommand({
             Text: text,
             VoiceId: selectedVoice as any,
@@ -76,6 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             TextType: (speakingRate || pitch) ? 'ssml' : 'text',
         });
 
+        // SSML ile speakingRate ve pitch uygulanması
         if (speakingRate || pitch) {
             const rate = typeof speakingRate === 'number' ? `${Math.round(speakingRate * 100)}%` : '100%';
             const p = typeof pitch === 'number' ? `${Math.round(pitch)}%` : '0%';
